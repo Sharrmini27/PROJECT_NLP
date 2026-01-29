@@ -1,80 +1,84 @@
 import streamlit as st
-from transformers import pipeline
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
 from newspaper import Article
 import time
 import nltk
 
-# Requirement 1.iii: Initialize necessary NLP resources
+# Fix for NLTK errors in cloud environments
 try:
     nltk.data.find('tokenizers/punkt')
 except LookupError:
     nltk.download('punkt')
 
-# 1. Page Configuration (Requirement 1.ii: Specify features)
-st.set_page_config(page_title="News Article Summarizer", page_icon="📝")
+# 1. Page Configuration
+st.set_page_config(page_title="AI News Summarizer", page_icon="📝", layout="wide")
 
-# 2. Load NLP Model (Requirement 1.iii: Use appropriate technologies)
-# We use BART because it is excellent for Abstractive Summarization
+# 2. Optimized Model Loading (Bypasses KeyError)
 @st.cache_resource
-def load_summarizer():
-    # Fixed: Explicitly defining task="summarization" to resolve the KeyError
-    return pipeline(task="summarization", model="facebook/bart-large-cnn")
+def load_model():
+    model_name = "facebook/bart-large-cnn"
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+    # Using explicit task setup to prevent 'KeyError: summarization'
+    return pipeline("summarization", model=model, tokenizer=tokenizer)
 
-summarizer = load_summarizer()
+summarizer = load_model()
 
-st.title("🤖 News Article Summarizer")
-st.markdown("Enter a news URL to get an AI-generated summary using the **BART Transformer model**.")
+# UI Setup
+st.title("🤖 AI-Powered News Summarizer")
+st.markdown("---")
 
-# 3. User Input (Requirement 1.ii)
-url = st.text_input("Paste News Article URL here:")
+# 3. User Input
+url = st.text_input("🔗 Paste News Article URL here:", placeholder="https://www.channelnewsasia.com/...")
 
-if st.button("Summarize Article"):
+if st.button("Generate Summary ✨"):
     if url:
         try:
-            with st.spinner('AI is reading and summarizing...'):
+            with st.spinner('AI is analyzing the article... please wait.'):
                 start_time = time.time()
                 
-                # Fetch and Parse the article using Newspaper3k
+                # Fetch and Parse
                 article = Article(url)
                 article.download()
                 article.parse()
                 
-                if not article.text:
-                    st.error("Could not extract text. Some sites block automated access.")
+                if not article.text or len(article.text) < 100:
+                    st.error("❌ Extraction failed. This website might be blocking AI access or has too little text.")
                 else:
-                    # Execute Summarization (Abstractive)
-                    # Requirement 1.iv: Model configuration for optimal summary length
-                    summary_output = summarizer(article.text, max_length=130, min_length=30, do_sample=False)
+                    # Summarization Logic
+                    summary_output = summarizer(article.text, max_length=150, min_length=40, do_sample=False)
                     summary_text = summary_output[0]['summary_text']
                     
                     end_time = time.time()
                     
-                    # 4. Display Results (Requirement 1.iv: Performance measurement)
-                    st.subheader(f"Title: {article.title}")
-                    st.write("### AI Summary:")
-                    st.success(summary_text)
+                    # 4. Display Results
+                    st.subheader(f"📄 Article Title: {article.title}")
                     
-                    # Performance Metrics for the Report
+                    col_res, col_space = st.columns([2, 1])
+                    with col_res:
+                        st.success(summary_text)
+                    
+                    # Performance Metrics Calculation
                     orig_len = len(article.text.split())
                     summ_len = len(summary_text.split())
                     duration = round(end_time - start_time, 2)
                     reduction = round((1 - (summ_len / orig_len)) * 100, 1)
                     
+                    # Display Metrics
                     st.write("---")
-                    st.info(f"**Performance Metrics:**")
-                    col1, col2, col3 = st.columns(3)
-                    col1.metric("Original Words", orig_len)
-                    col2.metric("Summary Words", summ_len)
-                    col3.metric("Reduction", f"{reduction}%")
-                    st.write(f"⏱ **Processing Time:** {duration} seconds")
+                    st.markdown("### 📊 Performance Metrics")
+                    m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+                    m_col1.metric("Original Words", orig_len)
+                    m_col2.metric("Summary Words", summ_len)
+                    m_col3.metric("Reduction", f"{reduction}%")
+                    m_col4.metric("Time Taken", f"{duration}s")
                     
         except Exception as e:
-            st.error(f"Error: {e}. Please ensure the URL is valid and accessible.")
+            st.error(f"⚠️ An error occurred: {str(e)}")
     else:
-        st.warning("Please enter a URL first.")
+        st.warning("⚠️ Please provide a URL first.")
 
-# Sidebar for Report Info (Requirement 2: Clarity)
-st.sidebar.title("Project Info")
-st.sidebar.write("**Course:** JIE43303 NLP")
-st.sidebar.write("**Model:** BART (Abstractive)")
-st.sidebar.write("**Student Project Task**")
+# Sidebar
+st.sidebar.title("Project Details")
+st.sidebar.info("Model: BART-Large-CNN")
+st.sidebar.markdown("This app uses Abstractive Summarization to rewrite news articles concisely.")
