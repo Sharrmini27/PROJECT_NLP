@@ -2,5 +2,4 @@ streamlit
 transformers
 torch
 newspaper3k
-lxml_html_clean
-pandas
+nltk
